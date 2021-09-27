@@ -104,6 +104,7 @@ uint8_t vfmUpState = 0;
 uint8_t fwdRevState = 0;
 uint8_t vfmDownState = 0;
 uint8_t vfmResetState = 0;
+uint8_t vfmVal = 1;
 long lastDcmbPacket = 0;
 
 
@@ -139,13 +140,15 @@ void StartDefaultTask(void const * argument);
 
 
 static void mc2StateTmr(TimerHandle_t xTimer) {
+	static uint8_t locVfmVal = 1; //Not for actual DCMB most likely
 	static uint8_t buf[8] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
 	//first index set to 0x00 since the data ID for MC2 state is 0x00
 
 	//motorState = 0;
 	//fwdRevState = 1;
+	//follwing if else are for testing
 	if (fwdRevState == 1) //reverse
-		HAL_GPIO_WritePin(GPIOG, GPIO_PIN_1, 0);
+		HAL_GPIO_WritePin(GPIOG, GPIO_PIN_1, 0); //fwdREv
 	else if (fwdRevState == 0) //forward
 		HAL_GPIO_WritePin(GPIOG, GPIO_PIN_1, 1);
 	if (regenValue ==255) {
@@ -154,19 +157,39 @@ static void mc2StateTmr(TimerHandle_t xTimer) {
 	else if (regenValue < 20) {
 		HAL_GPIO_WritePin(GPIOG, GPIO_PIN_2, 0); // CS1
 	}
+	if (locVfmVal == 4) {
+		HAL_GPIO_WritePin(GPIOK, GPIO_PIN_2, 1); // CS0
+	}
+	else if(locVfmVal == 1) {
+		 HAL_GPIO_WritePin(GPIOK, GPIO_PIN_2, 0); // CS0
+	}
+	//testing end
 
+	// Likely not for DCMB
+	if (locVfmVal != vfmVal){
+		if (vfmVal > locVfmVal) {
+			vfmUpState = 1;
+		}
+		else if (vfmVal < locVfmVal) {
+			vfmDownState = 1;
+		}
+		locVfmVal = vfmVal;
+	}
 	buf[1] = (motorState & 0b01)  << 4;
 	buf[1] |= (fwdRevState & 0b01) << 3;
 	buf[1] |= (vfmUpState & 0b01) << 2;
 	buf[1] |= (vfmDownState & 0b01) << 1;
 	buf[2] = accValue;
 	buf[3] = regenValue; // New for GEN11
+
+
 	if(vfmUpState == 1){
 		vfmUpState = 0;
 	}
 	if(vfmDownState == 1){
 		vfmDownState = 0;
 	}
+
 	B_tcpSend(btcp, buf, 8);
 
 }
@@ -215,18 +238,19 @@ void task1_handler(void* parameters) {
 // This task is used to receive motor control signals from PC
 void task2_handler(void* parameters) {
 	int rxBufSize = 5;
-	int timeout = 2000;
+	int timeout = 700;
 	char rxBuf[rxBufSize];
 
 	uint8_t locMotorState;
 	uint8_t locFwdRevState;
 	uint16_t locAcc;
 	uint16_t locReg;
+	uint8_t locVfmVal = 1;
 	while (1) {
 		//Clear buff
-		for (int i=0; i < rxBufSize; i++) {
+		/*for (int i=0; i < rxBufSize; i++) {
 			rxBuf[i] = '\0';
-		}
+		}*/
 		//char rxBuf[rxBufSize];
 
 		HAL_UART_Receive(&huart2, (uint8_t*)rxBuf, rxBufSize, timeout);
@@ -279,6 +303,17 @@ void task2_handler(void* parameters) {
 			locReg = (uint16_t)atoi(val);
 			if (locReg != regenValue)
 				regenValue = locReg;
+		}
+		else if (strncmp(rxBuf, "V", 1) == 0) {
+			char val[16];
+			int i;
+			for (i = 1; i < strlen(rxBuf); i++) {
+				val[i-1] = rxBuf[i];
+			} val[i] = '\0';
+			locVfmVal = (uint8_t)atoi(val);
+			if (locVfmVal != vfmVal)
+				vfmVal = locVfmVal;
+
 
 		}
 	}
