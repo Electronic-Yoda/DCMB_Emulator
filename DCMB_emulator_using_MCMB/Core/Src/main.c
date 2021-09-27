@@ -27,7 +27,9 @@
 #include "h7Boot.h"
 #include "buart.h"
 #include "btcp.h"
-#include "math.h"
+//#include "math.h"
+#include "string.h"
+#include "stdlib.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -92,8 +94,8 @@ B_uartHandle_t *buart;
 B_uartHandle_t *radioBuart;
 B_tcpHandle_t *btcp;
 B_tcpHandle_t *radioBtcp;
-uint8_t motorTemperature;
-uint8_t motorFrequency;
+uint8_t motorTemperature = 0;
+uint8_t motorPWMFrequency = 0;
 
 uint16_t accValue = 0; //Highest wiper position is 256 (0b 1 0000 0000)
 uint16_t regenValue = 0;
@@ -103,10 +105,13 @@ uint8_t fwdRevState = 0;
 uint8_t vfmDownState = 0;
 uint8_t vfmResetState = 0;
 long lastDcmbPacket = 0;
+
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
+void PeriphCommonClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_DMA_Init(void);
 static void MX_UART4_Init(void);
@@ -131,16 +136,31 @@ static void MX_ADC1_Init(void);
 void StartDefaultTask(void const * argument);
 
 /* USER CODE BEGIN PFP */
+
+
 static void mc2StateTmr(TimerHandle_t xTimer) {
 	static uint8_t buf[8] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
 	//first index set to 0x00 since the data ID for MC2 state is 0x00
 
-	motorState = 1;
-	fwdRevState = 1;
+	//motorState = 0;
+	//fwdRevState = 1;
+	if (fwdRevState == 1) //reverse
+		HAL_GPIO_WritePin(GPIOG, GPIO_PIN_1, 0);
+	else if (fwdRevState == 0) //forward
+		HAL_GPIO_WritePin(GPIOG, GPIO_PIN_1, 1);
+	if (regenValue ==255) {
+		HAL_GPIO_WritePin(GPIOG, GPIO_PIN_2, 1); // CS1
+	}
+	else if (regenValue < 20) {
+		HAL_GPIO_WritePin(GPIOG, GPIO_PIN_2, 0); // CS1
+	}
+
 	buf[1] = (motorState & 0b01)  << 4;
 	buf[1] |= (fwdRevState & 0b01) << 3;
 	buf[1] |= (vfmUpState & 0b01) << 2;
 	buf[1] |= (vfmDownState & 0b01) << 1;
+	buf[2] = accValue;
+	buf[3] = regenValue; // New for GEN11
 	if(vfmUpState == 1){
 		vfmUpState = 0;
 	}
@@ -158,7 +178,7 @@ void serialParse(B_tcpPacket_t *pkt) {
 		case 0x03:  //MCMB sender ID
 			//Check if data ID is motor speed (0x03)
 			if(pkt->payload[4] == 0x03){
-				motorFrequency = pkt->payload[5];
+				motorPWMFrequency = pkt->payload[5];
 			}
 			// If data ID is motor temperature (0x05) //New addition
 			if (pkt->payload[4] == 0x05) {
@@ -167,6 +187,103 @@ void serialParse(B_tcpPacket_t *pkt) {
 
 	}
 }
+// This task is used to send motor temperature and speed to the PC
+void task1_handler(void* parameters) {
+	//char *test = "Test1\n";
+	//char *test2 = "Test2\n";
+	char temperatureBuf[30];
+	char speedBuf[30];
+	int timeOut = 1000;
+	  /* Infinite loop */
+	while(1)
+	{
+		sprintf(temperatureBuf, "Motor Temperature: %d Degrees\n", (int)motorTemperature);
+		HAL_UART_Transmit(&huart2, (uint8_t*)temperatureBuf, strlen(temperatureBuf), timeOut);
+		//vTaskDelay(pdMS_TO_TICKS(500));
+		//Note: delay must be equal or greater than python program's receive delay
+
+		sprintf(speedBuf, "Motor PWM Frequency: %d Hz\n", (int)motorPWMFrequency);
+		HAL_UART_Transmit(&huart2, (uint8_t*)speedBuf, strlen(speedBuf), timeOut);
+		vTaskDelay(pdMS_TO_TICKS(500));
+
+		//HAL_UART_Transmit(&huart2, (uint8_t*)test, strlen(test), timeOut);
+		//HAL_UART_Transmit(&huart2, (uint8_t*)test2, strlen(test2), timeOut);
+
+	}
+}
+
+// This task is used to receive motor control signals from PC
+void task2_handler(void* parameters) {
+	int rxBufSize = 5;
+	int timeout = 2000;
+	char rxBuf[rxBufSize];
+
+	uint8_t locMotorState;
+	uint8_t locFwdRevState;
+	uint16_t locAcc;
+	uint16_t locReg;
+	while (1) {
+		//Clear buff
+		for (int i=0; i < rxBufSize; i++) {
+			rxBuf[i] = '\0';
+		}
+		//char rxBuf[rxBufSize];
+
+		HAL_UART_Receive(&huart2, (uint8_t*)rxBuf, rxBufSize, timeout);
+		rxBuf[4] = '\0';
+		if (strncmp(rxBuf, "M On", strlen("M On")) == 0) {
+			locMotorState = 1;
+			if (locMotorState != motorState)
+				motorState = locMotorState;
+		}
+		else if (strncmp(rxBuf, "MOff", strlen("MOff")) == 0) {
+			locMotorState = 0;
+			if (locMotorState != motorState)
+				motorState = locMotorState;
+		}
+		else if (strncmp(rxBuf, "F wd", strlen("F wd")) == 0) {
+			locFwdRevState = 0; //Note 0 is forward
+			if (locFwdRevState != fwdRevState)
+				fwdRevState = locFwdRevState;
+			//HAL_GPIO_WritePin(GPIOG, GPIO_PIN_1, 1); // FwdRev
+
+		}
+		else if (strncmp(rxBuf, "R ev", strlen("R ev")) == 0) {
+			locFwdRevState = 1;
+			if (locFwdRevState != fwdRevState)
+				fwdRevState = locFwdRevState;
+			//HAL_GPIO_WritePin(GPIOG, GPIO_PIN_1, 0); // FwdRev
+		}
+		else if (strncmp(rxBuf, "A", 1) == 0) {
+			char val[16];
+			//HAL_GPIO_WritePin(GPIOG, GPIO_PIN_1, 1); // FwdRev
+			//strncpy(val, &rxBuf[strlen("Accel: ")], strlen(rxBuf)-strlen("Accel: "));
+			int i;
+			for (i = 1; i < strlen(rxBuf); i++) {
+				val[i-1] = rxBuf[i];
+			} val[i] = '\0';
+			//char *end;
+			locAcc = (uint16_t)atoi(val);
+			if (locAcc != accValue)
+				accValue = locAcc;
+
+		}
+		else if (strncmp(rxBuf, "R", 1) == 0) {
+			char val[16];
+			//HAL_GPIO_WritePin(GPIOG, GPIO_PIN_1, 0); // FwdRev
+			//strncpy(val, &rxBuf[strlen("Regen: ")], strlen(rxBuf)-strlen("Regen: "));
+			int i;
+			for (i = 1; i < strlen(rxBuf); i++) {
+				val[i-1] = rxBuf[i];
+			} val[i] = '\0';
+			locReg = (uint16_t)atoi(val);
+			if (locReg != regenValue)
+				regenValue = locReg;
+
+		}
+	}
+}
+
 
 /* USER CODE END PFP */
 
@@ -182,6 +299,8 @@ void serialParse(B_tcpPacket_t *pkt) {
 int main(void)
 {
   /* USER CODE BEGIN 1 */
+	TaskHandle_t task1_handle;
+	TaskHandle_t task2_handle;
 
   /* USER CODE END 1 */
 
@@ -196,6 +315,9 @@ int main(void)
 
   /* Configure the system clock */
   SystemClock_Config();
+
+/* Configure the peripherals common clocks */
+  PeriphCommonClock_Config();
 
   /* USER CODE BEGIN SysInit */
 
@@ -216,13 +338,13 @@ int main(void)
   MX_ADC1_Init();
   /* USER CODE BEGIN 2 */
   uint8_t SPI_START_VAL = 0b00010001;
-  buart = B_uartStart(&huart2);
+  buart = B_uartStart(&huart4); //Note huart4 is for rs485
   //radioBuart = B_uartStart(&huart8);
   //B_uartHandle_t * sendBuarts[2] = {buart, radioBuart};
   btcp = B_tcpStart(&buart, buart, 1, &hcrc);
   HAL_GPIO_WritePin(GPIOJ, GPIO_PIN_5, GPIO_PIN_SET); // Main
   HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_13); // Motor LED
-  HAL_GPIO_WritePin(GPIOG, GPIO_PIN_1, GPIO_PIN_RESET); // FwdRev
+  HAL_GPIO_WritePin(GPIOG, GPIO_PIN_1, GPIO_PIN_SET); // FwdRev
   HAL_GPIO_WritePin(GPIOI, GPIO_PIN_15, GPIO_PIN_SET); // VFM UP
   HAL_GPIO_WritePin(GPIOI, GPIO_PIN_14, GPIO_PIN_SET); // VFM Down
   HAL_GPIO_WritePin(GPIOG, GPIO_PIN_0, GPIO_PIN_SET); // ECO
@@ -236,6 +358,7 @@ int main(void)
 
 
   xTimerStart(xTimerCreate("mc2StateTmr", 10, pdTRUE, NULL, mc2StateTmr), 0);
+
   HAL_TIM_Base_Start(&htim2);
   /* USER CODE END 2 */
 
@@ -265,9 +388,30 @@ int main(void)
 #endif
   /* add threads, ... */
   /* USER CODE END RTOS_THREADS */
+	BaseType_t status;
+
+	status = xTaskCreate(task1_handler,  /* Function that implements the task. */
+                "Task-1", /* Text name for the task. */
+                200, 		/* 200 words *4(bytes/word) = 800 bytes allocated for task's stack*/
+                "dont need this this time", /* Parameter passed into the task. */
+                4, /* Priority at which the task is created. */ //Note must be 4 since btcp is 4
+                &task1_handle /* Used to pass out the created task's handle. */
+                              );
+	configASSERT(status == pdPASS); // Error checking
+
+	status = xTaskCreate(task2_handler,  /* Function that implements the task. */
+	              "Task-2", /* Text name for the task. */
+	              200, 		/* 200 words *4(bytes/word) = 800 bytes allocated for task's stack*/
+				  "dont need this this time", /* Parameter passed into the task. */
+	              4, /* Priority at which the task is created. */
+				  &task2_handle /* Used to pass out the created task's handle. */
+	                            );
+	configASSERT(status == pdPASS); // Error checking
+
 
   /* Start scheduler */
-  osKernelStart();
+  vTaskStartScheduler();
+  //osKernelStart();
 
   /* We should never get here as control is now taken by the scheduler */
   /* Infinite loop */
@@ -289,7 +433,6 @@ void SystemClock_Config(void)
 {
   RCC_OscInitTypeDef RCC_OscInitStruct = {0};
   RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
-  RCC_PeriphCLKInitTypeDef PeriphClkInitStruct = {0};
 
   /** Supply configuration update enable
   */
@@ -342,12 +485,21 @@ void SystemClock_Config(void)
   {
     Error_Handler();
   }
-  PeriphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_RTC|RCC_PERIPHCLK_HRTIM1
-                              |RCC_PERIPHCLK_USART2|RCC_PERIPHCLK_UART4
-                              |RCC_PERIPHCLK_UART8|RCC_PERIPHCLK_SPI3
-                              |RCC_PERIPHCLK_SDMMC|RCC_PERIPHCLK_ADC
-                              |RCC_PERIPHCLK_USB|RCC_PERIPHCLK_LPTIM1
-                              |RCC_PERIPHCLK_QSPI|RCC_PERIPHCLK_FMC;
+  HAL_RCC_MCOConfig(RCC_MCO1, RCC_MCO1SOURCE_PLL1QCLK, RCC_MCODIV_1);
+}
+
+/**
+  * @brief Peripherals Common Clock Configuration
+  * @retval None
+  */
+void PeriphCommonClock_Config(void)
+{
+  RCC_PeriphCLKInitTypeDef PeriphClkInitStruct = {0};
+
+  /** Initializes the peripherals clock
+  */
+  PeriphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_QSPI|RCC_PERIPHCLK_ADC
+                              |RCC_PERIPHCLK_SDMMC;
   PeriphClkInitStruct.PLL2.PLL2M = 8;
   PeriphClkInitStruct.PLL2.PLL2N = 32;
   PeriphClkInitStruct.PLL2.PLL2P = 2;
@@ -356,24 +508,13 @@ void SystemClock_Config(void)
   PeriphClkInitStruct.PLL2.PLL2RGE = RCC_PLL2VCIRANGE_3;
   PeriphClkInitStruct.PLL2.PLL2VCOSEL = RCC_PLL2VCOWIDE;
   PeriphClkInitStruct.PLL2.PLL2FRACN = 0;
-  PeriphClkInitStruct.FmcClockSelection = RCC_FMCCLKSOURCE_D1HCLK;
   PeriphClkInitStruct.QspiClockSelection = RCC_QSPICLKSOURCE_PLL2;
   PeriphClkInitStruct.SdmmcClockSelection = RCC_SDMMCCLKSOURCE_PLL2;
-  PeriphClkInitStruct.Spi123ClockSelection = RCC_SPI123CLKSOURCE_PLL;
-  PeriphClkInitStruct.Usart234578ClockSelection = RCC_USART234578CLKSOURCE_D2PCLK1;
-  PeriphClkInitStruct.UsbClockSelection = RCC_USBCLKSOURCE_HSI48;
-  PeriphClkInitStruct.Lptim1ClockSelection = RCC_LPTIM1CLKSOURCE_D2PCLK1;
   PeriphClkInitStruct.AdcClockSelection = RCC_ADCCLKSOURCE_PLL2;
-  PeriphClkInitStruct.RTCClockSelection = RCC_RTCCLKSOURCE_LSI;
-  PeriphClkInitStruct.Hrtim1ClockSelection = RCC_HRTIM1CLK_CPUCLK;
   if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInitStruct) != HAL_OK)
   {
     Error_Handler();
   }
-  HAL_RCC_MCOConfig(RCC_MCO1, RCC_MCO1SOURCE_PLL1QCLK, RCC_MCODIV_1);
-  /** Enable USB Voltage detector
-  */
-  HAL_PWREx_EnableUSBVoltageDetector();
 }
 
 /**
@@ -529,9 +670,6 @@ static void MX_HRTIM_Init(void)
   }
   pTimerCfg.InterruptRequests = HRTIM_TIM_IT_NONE;
   pTimerCfg.DMARequests = HRTIM_TIM_DMA_NONE;
-  pTimerCfg.DMASrcAddress = 0x0000;
-  pTimerCfg.DMADstAddress = 0x0000;
-  pTimerCfg.DMASize = 0x1;
   pTimerCfg.PushPull = HRTIM_TIMPUSHPULLMODE_DISABLED;
   pTimerCfg.FaultEnable = HRTIM_TIMFAULTENABLE_NONE;
   pTimerCfg.FaultLock = HRTIM_TIMFAULTLOCK_READWRITE;
@@ -544,10 +682,6 @@ static void MX_HRTIM_Init(void)
   {
     Error_Handler();
   }
-  pTimerCfg.InterruptRequests = HRTIM_MASTER_IT_NONE;
-  pTimerCfg.DMASrcAddress = 0x0000;
-  pTimerCfg.DMADstAddress = 0x0000;
-  pTimerCfg.DMASize = 0x1;
   pTimerCfg.DelayedProtectionMode = HRTIM_TIMER_D_E_DELAYEDPROTECTION_DISABLED;
   if (HAL_HRTIM_WaveformTimerConfig(&hhrtim, HRTIM_TIMERINDEX_TIMER_E, &pTimerCfg) != HAL_OK)
   {
@@ -707,7 +841,6 @@ static void MX_SDMMC1_SD_Init(void)
   hsd1.Init.BusWide = SDMMC_BUS_WIDE_4B;
   hsd1.Init.HardwareFlowControl = SDMMC_HARDWARE_FLOW_CONTROL_DISABLE;
   hsd1.Init.ClockDiv = 0;
-  hsd1.Init.TranceiverPresent = SDMMC_TRANSCEIVER_NOT_PRESENT;
   if (HAL_SD_Init(&hsd1) != HAL_OK)
   {
     Error_Handler();
@@ -1127,7 +1260,7 @@ static void MX_USART2_UART_Init(void)
 
   /* USER CODE END USART2_Init 1 */
   huart2.Instance = USART2;
-  huart2.Init.BaudRate = 230400;
+  huart2.Init.BaudRate = 115200;
   huart2.Init.WordLength = UART_WORDLENGTH_8B;
   huart2.Init.StopBits = UART_STOPBITS_1;
   huart2.Init.Parity = UART_PARITY_NONE;
@@ -1592,12 +1725,13 @@ void StartDefaultTask(void const * argument)
   /* Infinite loop */
   for(;;)
   {
-    osDelay(1);
+
+    //osDelay(1);
   }
   /* USER CODE END 5 */
 }
 
- /**
+/**
   * @brief  Period elapsed callback in non blocking mode
   * @note   This function is called  when TIM6 interrupt took place, inside
   * HAL_TIM_IRQHandler(). It makes a direct call to HAL_IncTick() to increment

@@ -1,5 +1,6 @@
 ################################################################################
 # Automatically-generated file. Do not edit!
+# Toolchain: GNU Tools for STM32 (9-2020-q2-update)
 ################################################################################
 
 -include ../makefile.init
@@ -32,10 +33,16 @@ endif
 
 -include ../makefile.defs
 
+OPTIONAL_TOOL_DEPS := \
+$(wildcard ../makefile.defs) \
+$(wildcard ../makefile.init) \
+$(wildcard ../makefile.targets) \
+
+
 BUILD_ARTIFACT_NAME := DCMB_emulator_using_MCMB
 BUILD_ARTIFACT_EXTENSION := elf
-BUILD_ARTIFACT_PREFIX := 
-BUILD_ARTIFACT := $(BUILD_ARTIFACT_PREFIX)$(BUILD_ARTIFACT_NAME).$(BUILD_ARTIFACT_EXTENSION)
+BUILD_ARTIFACT_PREFIX :=
+BUILD_ARTIFACT := $(BUILD_ARTIFACT_PREFIX)$(BUILD_ARTIFACT_NAME)$(if $(BUILD_ARTIFACT_EXTENSION),.$(BUILD_ARTIFACT_EXTENSION),)
 
 # Add inputs and outputs from these tool invocations to the build variables 
 EXECUTABLES += \
@@ -58,29 +65,29 @@ all: main-build
 main-build: DCMB_emulator_using_MCMB.elf secondary-outputs
 
 # Tool invocations
-DCMB_emulator_using_MCMB.elf: $(OBJS) $(USER_OBJS) C:\Users\Raymond\Documents\code\stm_\DCMB\DCMB_emulator_using_MCMB\STM32H753BITX_FLASH.ld
-	arm-none-eabi-gcc -o "DCMB_emulator_using_MCMB.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m7 -T"C:\Users\Raymond\Documents\code\stm_\DCMB\DCMB_emulator_using_MCMB\STM32H753BITX_FLASH.ld" --specs=nosys.specs -Wl,-Map="DCMB_emulator_using_MCMB.map" -Wl,--gc-sections -static --specs=nano.specs -mfpu=fpv5-d16 -mfloat-abi=hard -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
+DCMB_emulator_using_MCMB.elf: $(OBJS) $(USER_OBJS) C:\Users\goodb\Documents\code\stm\DCMB_Emulator\DCMB_emulator_using_MCMB\STM32H753BITX_FLASH.ld makefile objects.list $(OPTIONAL_TOOL_DEPS)
+	arm-none-eabi-gcc -o "DCMB_emulator_using_MCMB.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m7 -T"C:\Users\goodb\Documents\code\stm\DCMB_Emulator\DCMB_emulator_using_MCMB\STM32H753BITX_FLASH.ld" --specs=nosys.specs -Wl,-Map="DCMB_emulator_using_MCMB.map" -Wl,--gc-sections -static --specs=nano.specs -mfpu=fpv5-d16 -mfloat-abi=hard -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
 	@echo 'Finished building target: $@'
 	@echo ' '
 
-default.size.stdout: $(EXECUTABLES)
+default.size.stdout: $(EXECUTABLES) makefile objects.list $(OPTIONAL_TOOL_DEPS)
 	arm-none-eabi-size  $(EXECUTABLES)
 	@echo 'Finished building: $@'
 	@echo ' '
 
-DCMB_emulator_using_MCMB.list: $(EXECUTABLES)
+DCMB_emulator_using_MCMB.list: $(EXECUTABLES) makefile objects.list $(OPTIONAL_TOOL_DEPS)
 	arm-none-eabi-objdump -h -S $(EXECUTABLES) > "DCMB_emulator_using_MCMB.list"
 	@echo 'Finished building: $@'
 	@echo ' '
 
-DCMB_emulator_using_MCMB.bin: $(EXECUTABLES)
+DCMB_emulator_using_MCMB.bin: $(EXECUTABLES) makefile objects.list $(OPTIONAL_TOOL_DEPS)
 	arm-none-eabi-objcopy  -O binary $(EXECUTABLES) "DCMB_emulator_using_MCMB.bin"
 	@echo 'Finished building: $@'
 	@echo ' '
 
 # Other Targets
 clean:
-	-$(RM) *
+	-$(RM) $(SIZE_OUTPUT)$(OBJDUMP_LIST)$(EXECUTABLES)$(OBJS)$(S_DEPS)$(S_UPPER_DEPS)$(C_DEPS)$(OBJCOPY_BIN) DCMB_emulator_using_MCMB.elf
 	-@echo ' '
 
 secondary-outputs: $(SIZE_OUTPUT) $(OBJDUMP_LIST) $(OBJCOPY_BIN)
@@ -93,6 +100,5 @@ warn-no-linker-script-specified:
 	@echo 'Warning: No linker script specified. Check the linker settings in the build configuration.'
 
 .PHONY: all clean dependents fail-specified-linker-script-missing warn-no-linker-script-specified
-.SECONDARY:
 
 -include ../makefile.targets

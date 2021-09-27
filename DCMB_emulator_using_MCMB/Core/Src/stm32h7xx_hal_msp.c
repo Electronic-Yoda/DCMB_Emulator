@@ -206,11 +206,21 @@ void HAL_CRC_MspDeInit(CRC_HandleTypeDef* hcrc)
 */
 void HAL_HRTIM_MspInit(HRTIM_HandleTypeDef* hhrtim)
 {
+  RCC_PeriphCLKInitTypeDef PeriphClkInitStruct = {0};
   if(hhrtim->Instance==HRTIM1)
   {
   /* USER CODE BEGIN HRTIM1_MspInit 0 */
 
   /* USER CODE END HRTIM1_MspInit 0 */
+  /** Initializes the peripherals clock
+  */
+    PeriphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_HRTIM1;
+    PeriphClkInitStruct.Hrtim1ClockSelection = RCC_HRTIM1CLK_CPUCLK;
+    if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInitStruct) != HAL_OK)
+    {
+      Error_Handler();
+    }
+
     /* Peripheral clock enable */
     __HAL_RCC_HRTIM1_CLK_ENABLE();
   /* USER CODE BEGIN HRTIM1_MspInit 1 */
@@ -286,11 +296,21 @@ void HAL_HRTIM_MspDeInit(HRTIM_HandleTypeDef* hhrtim)
 void HAL_LPTIM_MspInit(LPTIM_HandleTypeDef* hlptim)
 {
   GPIO_InitTypeDef GPIO_InitStruct = {0};
+  RCC_PeriphCLKInitTypeDef PeriphClkInitStruct = {0};
   if(hlptim->Instance==LPTIM1)
   {
   /* USER CODE BEGIN LPTIM1_MspInit 0 */
 
   /* USER CODE END LPTIM1_MspInit 0 */
+  /** Initializes the peripherals clock
+  */
+    PeriphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_LPTIM1;
+    PeriphClkInitStruct.Lptim1ClockSelection = RCC_LPTIM1CLKSOURCE_D2PCLK1;
+    if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInitStruct) != HAL_OK)
+    {
+      Error_Handler();
+    }
+
     /* Peripheral clock enable */
     __HAL_RCC_LPTIM1_CLK_ENABLE();
 
@@ -451,11 +471,21 @@ void HAL_QSPI_MspDeInit(QSPI_HandleTypeDef* hqspi)
 */
 void HAL_RTC_MspInit(RTC_HandleTypeDef* hrtc)
 {
+  RCC_PeriphCLKInitTypeDef PeriphClkInitStruct = {0};
   if(hrtc->Instance==RTC)
   {
   /* USER CODE BEGIN RTC_MspInit 0 */
 
   /* USER CODE END RTC_MspInit 0 */
+  /** Initializes the peripherals clock
+  */
+    PeriphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_RTC;
+    PeriphClkInitStruct.RTCClockSelection = RCC_RTCCLKSOURCE_LSI;
+    if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInitStruct) != HAL_OK)
+    {
+      Error_Handler();
+    }
+
     /* Peripheral clock enable */
     __HAL_RCC_RTC_ENABLE();
   /* USER CODE BEGIN RTC_MspInit 1 */
@@ -606,11 +636,21 @@ void HAL_SD_MspDeInit(SD_HandleTypeDef* hsd)
 void HAL_SPI_MspInit(SPI_HandleTypeDef* hspi)
 {
   GPIO_InitTypeDef GPIO_InitStruct = {0};
+  RCC_PeriphCLKInitTypeDef PeriphClkInitStruct = {0};
   if(hspi->Instance==SPI3)
   {
   /* USER CODE BEGIN SPI3_MspInit 0 */
 
   /* USER CODE END SPI3_MspInit 0 */
+  /** Initializes the peripherals clock
+  */
+    PeriphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_SPI3;
+    PeriphClkInitStruct.Spi123ClockSelection = RCC_SPI123CLKSOURCE_PLL;
+    if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInitStruct) != HAL_OK)
+    {
+      Error_Handler();
+    }
+
     /* Peripheral clock enable */
     __HAL_RCC_SPI3_CLK_ENABLE();
 
@@ -937,11 +977,21 @@ void HAL_TIM_Encoder_MspDeInit(TIM_HandleTypeDef* htim_encoder)
 void HAL_UART_MspInit(UART_HandleTypeDef* huart)
 {
   GPIO_InitTypeDef GPIO_InitStruct = {0};
+  RCC_PeriphCLKInitTypeDef PeriphClkInitStruct = {0};
   if(huart->Instance==UART4)
   {
   /* USER CODE BEGIN UART4_MspInit 0 */
 
   /* USER CODE END UART4_MspInit 0 */
+  /** Initializes the peripherals clock
+  */
+    PeriphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_UART4;
+    PeriphClkInitStruct.Usart234578ClockSelection = RCC_USART234578CLKSOURCE_D2PCLK1;
+    if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInitStruct) != HAL_OK)
+    {
+      Error_Handler();
+    }
+
     /* Peripheral clock enable */
     __HAL_RCC_UART4_CLK_ENABLE();
 
@@ -1006,6 +1056,16 @@ void HAL_UART_MspInit(UART_HandleTypeDef* huart)
   /* USER CODE BEGIN UART8_MspInit 0 */
 
   /* USER CODE END UART8_MspInit 0 */
+
+  /** Initializes the peripherals clock
+  */
+    PeriphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_UART8;
+    PeriphClkInitStruct.Usart234578ClockSelection = RCC_USART234578CLKSOURCE_D2PCLK1;
+    if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInitStruct) != HAL_OK)
+    {
+      Error_Handler();
+    }
+
     /* Peripheral clock enable */
     __HAL_RCC_UART8_CLK_ENABLE();
 
@@ -1070,6 +1130,16 @@ void HAL_UART_MspInit(UART_HandleTypeDef* huart)
   /* USER CODE BEGIN USART2_MspInit 0 */
 
   /* USER CODE END USART2_MspInit 0 */
+
+  /** Initializes the peripherals clock
+  */
+    PeriphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_USART2;
+    PeriphClkInitStruct.Usart234578ClockSelection = RCC_USART234578CLKSOURCE_D2PCLK1;
+    if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInitStruct) != HAL_OK)
+    {
+      Error_Handler();
+    }
+
     /* Peripheral clock enable */
     __HAL_RCC_USART2_CLK_ENABLE();
 
@@ -1249,6 +1319,16 @@ static void HAL_FMC_MspInit(void){
     return;
   }
   FMC_Initialized = 1;
+  RCC_PeriphCLKInitTypeDef PeriphClkInitStruct = {0};
+
+  /** Initializes the peripherals clock
+  */
+    PeriphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_FMC;
+    PeriphClkInitStruct.FmcClockSelection = RCC_FMCCLKSOURCE_D1HCLK;
+    if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInitStruct) != HAL_OK)
+    {
+      Error_Handler();
+    }
 
   /* Peripheral clock enable */
   __HAL_RCC_FMC_CLK_ENABLE();
