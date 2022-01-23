@@ -81,8 +81,6 @@ DMA_HandleTypeDef hdma_uart4_tx;
 DMA_HandleTypeDef hdma_uart4_rx;
 DMA_HandleTypeDef hdma_uart8_rx;
 DMA_HandleTypeDef hdma_uart8_tx;
-DMA_HandleTypeDef hdma_usart2_rx;
-DMA_HandleTypeDef hdma_usart2_tx;
 
 WWDG_HandleTypeDef hwwdg1;
 
@@ -195,17 +193,21 @@ static void mc2StateTmr(TimerHandle_t xTimer) {
 }
 
 // call back function used to receive from MCMB
-// called by btcp functions
+// called by btcp layer
 void serialParse(B_tcpPacket_t *pkt) {
 	switch(pkt->sender){
-		case 0x03:  //MCMB sender ID
-			//Check if data ID is motor speed (0x03)
-			if(pkt->payload[4] == 0x03){
+		case 0x03:  //if sender is MCMB sender ID
+			//Check if data ID is motor speed (0x01)
+			if(pkt->payload[4] == 0x01){
 				motorPWMFrequency = pkt->payload[5];
 			}
-			// If data ID is motor temperature (0x05) //New addition
-			if (pkt->payload[4] == 0x05) {
+			// If data ID is motor temperature (0x02) //New addition
+			if (pkt->payload[4] == 0x02) {
 				motorTemperature = pkt->payload[5];
+			}
+			// If data ID is PSM data (0x03) //New addition
+			if (pkt->payload[4] == 0x06) {
+				// Process PSM data
 			}
 
 	}
@@ -422,16 +424,15 @@ int main(void)
   /* USER CODE BEGIN RTOS_THREADS */
 #endif
   /* add threads, ... */
-  /* USER CODE END RTOS_THREADS */
 	BaseType_t status;
 
 	status = xTaskCreate(task1_handler,  /* Function that implements the task. */
-                "Task-1", /* Text name for the task. */
-                200, 		/* 200 words *4(bytes/word) = 800 bytes allocated for task's stack*/
-                "dont need this this time", /* Parameter passed into the task. */
-                4, /* Priority at which the task is created. */ //Note must be 4 since btcp is 4
-                &task1_handle /* Used to pass out the created task's handle. */
-                              );
+              "Task-1", /* Text name for the task. */
+              200, 		/* 200 words *4(bytes/word) = 800 bytes allocated for task's stack*/
+              "dont need this this time", /* Parameter passed into the task. */
+              4, /* Priority at which the task is created. */ //Note must be 4 since btcp is 4
+              &task1_handle /* Used to pass out the created task's handle. */
+                            );
 	configASSERT(status == pdPASS); // Error checking
 
 	status = xTaskCreate(task2_handler,  /* Function that implements the task. */
@@ -442,11 +443,10 @@ int main(void)
 				  &task2_handle /* Used to pass out the created task's handle. */
 	                            );
 	configASSERT(status == pdPASS); // Error checking
-
+  /* USER CODE END RTOS_THREADS */
 
   /* Start scheduler */
-  vTaskStartScheduler();
-  //osKernelStart();
+  osKernelStart();
 
   /* We should never get here as control is now taken by the scheduler */
   /* Infinite loop */
@@ -1092,6 +1092,7 @@ static void MX_TIM5_Init(void)
 
   TIM_Encoder_InitTypeDef sConfig = {0};
   TIM_MasterConfigTypeDef sMasterConfig = {0};
+  TIM_IC_InitTypeDef sConfigIC = {0};
 
   /* USER CODE BEGIN TIM5_Init 1 */
 
@@ -1102,6 +1103,10 @@ static void MX_TIM5_Init(void)
   htim5.Init.Period = 4294967295;
   htim5.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim5.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_IC_Init(&htim5) != HAL_OK)
+  {
+    Error_Handler();
+  }
   sConfig.EncoderMode = TIM_ENCODERMODE_TI1;
   sConfig.IC1Polarity = TIM_ICPOLARITY_RISING;
   sConfig.IC1Selection = TIM_ICSELECTION_DIRECTTI;
@@ -1118,6 +1123,14 @@ static void MX_TIM5_Init(void)
   sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
   sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
   if (HAL_TIMEx_MasterConfigSynchronization(&htim5, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sConfigIC.ICPolarity = TIM_INPUTCHANNELPOLARITY_RISING;
+  sConfigIC.ICSelection = TIM_ICSELECTION_DIRECTTI;
+  sConfigIC.ICPrescaler = TIM_ICPSC_DIV1;
+  sConfigIC.ICFilter = 0;
+  if (HAL_TIM_IC_ConfigChannel(&htim5, &sConfigIC, TIM_CHANNEL_3) != HAL_OK)
   {
     Error_Handler();
   }
@@ -1295,7 +1308,7 @@ static void MX_USART2_UART_Init(void)
 
   /* USER CODE END USART2_Init 1 */
   huart2.Instance = USART2;
-  huart2.Init.BaudRate = 115200;
+  huart2.Init.BaudRate = 9600;
   huart2.Init.WordLength = UART_WORDLENGTH_8B;
   huart2.Init.StopBits = UART_STOPBITS_1;
   huart2.Init.Parity = UART_PARITY_NONE;
@@ -1397,12 +1410,6 @@ static void MX_DMA_Init(void)
   /* DMA1_Stream2_IRQn interrupt configuration */
   HAL_NVIC_SetPriority(DMA1_Stream2_IRQn, 5, 0);
   HAL_NVIC_EnableIRQ(DMA1_Stream2_IRQn);
-  /* DMA1_Stream3_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMA1_Stream3_IRQn, 5, 0);
-  HAL_NVIC_EnableIRQ(DMA1_Stream3_IRQn);
-  /* DMA1_Stream4_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMA1_Stream4_IRQn, 5, 0);
-  HAL_NVIC_EnableIRQ(DMA1_Stream4_IRQn);
   /* DMA1_Stream5_IRQn interrupt configuration */
   HAL_NVIC_SetPriority(DMA1_Stream5_IRQn, 5, 0);
   HAL_NVIC_EnableIRQ(DMA1_Stream5_IRQn);
@@ -1503,9 +1510,6 @@ static void MX_GPIO_Init(void)
   HAL_GPIO_WritePin(GPIOJ, GPIO_PIN_5|GPIO_PIN_12|GPIO_PIN_13|GPIO_PIN_15, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOH, GPIO_PIN_12, GPIO_PIN_RESET);
-
-  /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOK, GPIO_PIN_2|GPIO_PIN_3|GPIO_PIN_4|GPIO_PIN_5
                           |GPIO_PIN_6|GPIO_PIN_7, GPIO_PIN_RESET);
 
@@ -1572,13 +1576,6 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOJ, &GPIO_InitStruct);
-
-  /*Configure GPIO pin : PH12 */
-  GPIO_InitStruct.Pin = GPIO_PIN_12;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(GPIOH, &GPIO_InitStruct);
 
   /*Configure GPIO pins : PB12 PB14 PB15 */
   GPIO_InitStruct.Pin = GPIO_PIN_12|GPIO_PIN_14|GPIO_PIN_15;
@@ -1758,11 +1755,12 @@ void StartDefaultTask(void const * argument)
 {
   /* USER CODE BEGIN 5 */
   /* Infinite loop */
-  for(;;)
+  /*for(;;)
   {
 
     //osDelay(1);
-  }
+  }*/
+	osThreadTerminate(defaultTaskHandle);
   /* USER CODE END 5 */
 }
 
