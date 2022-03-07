@@ -145,10 +145,10 @@ static void mc2StateTmr(TimerHandle_t xTimer) {
 	//motorState = 0;
 	//fwdRevState = 1;
 	//follwing if else are for testing
-	if (fwdRevState == 1) //reverse
-		HAL_GPIO_WritePin(GPIOG, GPIO_PIN_1, 0); //fwdREv
-	else if (fwdRevState == 0) //forward
-		HAL_GPIO_WritePin(GPIOG, GPIO_PIN_1, 1);
+	if (motorState == 1) //reverse
+		HAL_GPIO_WritePin(GPIOJ, GPIO_PIN_5, 0); //fwdREv
+	else if (motorState == 0) //forward
+		HAL_GPIO_WritePin(GPIOJ, GPIO_PIN_5, 1);
 	if (regenValue ==255) {
 		HAL_GPIO_WritePin(GPIOG, GPIO_PIN_2, 1); // CS1
 	}
@@ -195,7 +195,7 @@ static void mc2StateTmr(TimerHandle_t xTimer) {
 // call back function used to receive from MCMB
 // called by btcp layer
 void serialParse(B_tcpPacket_t *pkt) {
-	switch(pkt->sender){
+	/*switch(pkt->sender){
 		case 0x03:  //if sender is MCMB sender ID
 			//Check if data ID is motor speed (0x01)
 			if(pkt->payload[4] == 0x01){
@@ -210,6 +210,18 @@ void serialParse(B_tcpPacket_t *pkt) {
 				// Process PSM data
 			}
 
+	} */
+	switch(pkt->senderID){ // decide what to do based on what sender address is received
+		case MCMB_ID:  // If the packet comes from MCMB
+			if(pkt->data[0] == MCMB_SPEED_PULSE_ID){
+				motorPWMFrequency = pkt->data[1];
+			}else if(pkt->data[0] == MCMB_MOTOR_TEMPERATURE_ID) {
+					// load temperature into local variable
+				motorTemperature = pkt->data[1];
+			}else if (pkt->data[0] == MCMB_BUS_METRICS_ID) {
+					// Process Bus Metrics
+			}
+			break;
 	}
 }
 // This task is used to send motor temperature and speed to the PC
@@ -222,6 +234,7 @@ void task1_handler(void* parameters) {
 	  /* Infinite loop */
 	while(1)
 	{
+
 		sprintf(temperatureBuf, "Motor Temperature: %d Degrees\n", (int)motorTemperature);
 		HAL_UART_Transmit(&huart2, (uint8_t*)temperatureBuf, strlen(temperatureBuf), timeOut);
 		//vTaskDelay(pdMS_TO_TICKS(500));
@@ -374,11 +387,11 @@ int main(void)
   MX_UART8_Init();
   MX_ADC1_Init();
   /* USER CODE BEGIN 2 */
-  uint8_t SPI_START_VAL = 0b00010001;
+  //uint8_t SPI_START_VAL = 0b00010001;
   buart = B_uartStart(&huart4); //Note huart4 is for rs485
   //radioBuart = B_uartStart(&huart8);
   //B_uartHandle_t * sendBuarts[2] = {buart, radioBuart};
-  btcp = B_tcpStart(&buart, buart, 1, &hcrc);
+  btcp = B_tcpStart(DCMB_ID, &buart, buart, 1, &hcrc);
   HAL_GPIO_WritePin(GPIOJ, GPIO_PIN_5, GPIO_PIN_SET); // Main
   HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_13); // Motor LED
   HAL_GPIO_WritePin(GPIOG, GPIO_PIN_1, GPIO_PIN_SET); // FwdRev
@@ -1212,7 +1225,7 @@ static void MX_UART4_Init(void)
 
   /* USER CODE END UART4_Init 1 */
   huart4.Instance = UART4;
-  huart4.Init.BaudRate = 2000000;
+  huart4.Init.BaudRate = 500000;
   huart4.Init.WordLength = UART_WORDLENGTH_8B;
   huart4.Init.StopBits = UART_STOPBITS_1;
   huart4.Init.Parity = UART_PARITY_NONE;
